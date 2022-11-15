@@ -1,7 +1,7 @@
 # supercolumnsgg-disasm
 dissasembly of Super Columns for Sega Game Gear
 
-you'll need wla-z80 and wlalink in the same directory
+you'll need wla-z80 and wlalink to reassemble
 
 disasm is from Emulicious
 
