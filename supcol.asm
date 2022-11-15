@@ -56,14 +56,14 @@ _RAM_C01A_ db
 .ende
 
 .enum $C01D export
-_RAM_C01D_ db
+PaletteInRAMStatus db
 _RAM_C01E_ db
-_RAM_C01F_ db
+PaletteInRAM db
 _RAM_C020_ db
 .ende
 
 .enum $C05F export
-_RAM_C05F_ dsb $40
+PaletteInRAM2 dsb $40
 _RAM_C09F_ db
 .ende
 
@@ -850,7 +850,7 @@ Initialize:
 	ld hl, _DATA_24E_
 	otir
 	rst $30	; _LABEL_30_
-	call _LABEL_78D_
+	call InitializePaletteInRAM
 	call _LABEL_684_
 	ld a, $FF
 	out (Port_SerialRaw), a
@@ -896,7 +896,7 @@ DoReset:      ; If the game is reset, it jumps back to this point
 	ld hl, _DATA_24E_
 	otir
 	rst $30	; _LABEL_30_
-	call _LABEL_78D_
+	call InitializePaletteInRAM
 	call _LABEL_684_
 	ld a, $FF
 	out (Port_SerialRaw), a
@@ -1138,11 +1138,11 @@ _LABEL_36D_:
 	ld b, $00
 -:
 	djnz -
-	ld a, (_RAM_C01D_)
+	ld a, (PaletteInRAMStatus)
 	and $01
-	call nz, _LABEL_79E_
+	call nz, WritePalette
 	xor a
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld (_RAM_C01E_), a
 	xor a
 	ld (_RAM_C011_VBlankAction), a
@@ -1166,12 +1166,12 @@ _LABEL_390_:
 	ex af, af'
 	call _LABEL_49B_
 -:
-	ld a, (_RAM_C01D_)
+	ld a, (PaletteInRAMStatus)
 	and $01
-	call nz, _LABEL_79E_
+	call nz, WritePalette
 	call _LABEL_4F7B_
 	xor a
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld (_RAM_C01E_), a
 	xor a
 	ld (_RAM_C011_VBlankAction), a
@@ -1228,9 +1228,9 @@ _LABEL_3DD_:
 	ld a, $01
 	ex af, af'
 	call _LABEL_49B_
-	ld a, (_RAM_C01D_)
+	ld a, (PaletteInRAMStatus)
 	and $01
-	call nz, _LABEL_79E_
+	call nz, WritePalette
 	ld a, (_RAM_C3DB_)
 	add a, a
 	add a, a
@@ -1253,7 +1253,7 @@ _LABEL_3DD_:
 	call _LABEL_49B_
 -:
 	xor a
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld (_RAM_C01E_), a
 	xor a
 	ld (_RAM_C011_VBlankAction), a
@@ -1266,9 +1266,9 @@ _LABEL_463_:
 	ld de, $0040
 	ld bc, $12BE
 	call _LABEL_503_
-	ld a, (_RAM_C01D_)
+	ld a, (PaletteInRAMStatus)
 	and $01
-	call nz, _LABEL_79E_
+	call nz, WritePalette
 	ld c, Port_VDPData
 	exx
 	ld hl, $38E6
@@ -1511,14 +1511,14 @@ _LABEL_5C1_:
 	ret
 
 _LABEL_5DF_:
-	call _LABEL_76B_
+	call LoadPaletteToRAMMirror
 	ld a, $01
 	ld (_RAM_C09F_), a
-	ld hl, _RAM_C01F_
+	ld hl, PaletteInRAM
 	ld de, _RAM_C020_
 	ld (hl), $00
 	call _LABEL_CF2_
-	ld hl, _RAM_C01D_
+	ld hl, PaletteInRAMStatus
 	set 0, (hl)
 	ld a, $02
 	ld (_RAM_C0A2_), a
@@ -1529,8 +1529,8 @@ _LABEL_5DF_:
 _LABEL_601_:
 	ld a, $02
 	ld (_RAM_C09F_), a
-	ld hl, _RAM_C01F_
-	ld de, _RAM_C05F_
+	ld hl, PaletteInRAM
+	ld de, PaletteInRAM2
 	ld bc, $0040
 	call _LABEL_CF0_
 	ld a, $02
@@ -1549,7 +1549,7 @@ _LABEL_61C_:
 	ld a, $02
 	ld (_RAM_C0A2_), a
 	call +
-	ld hl, _RAM_C01D_
+	ld hl, PaletteInRAMStatus
 	set 0, (hl)
 	ld hl, _RAM_C0A1_
 	inc (hl)
@@ -1575,8 +1575,8 @@ _LABEL_61C_:
 	ld a, (_RAM_C0A1_)
 ++:
 	ld c, a
-	ld de, _RAM_C05F_
-	ld hl, _RAM_C01F_
+	ld de, PaletteInRAM2
+	ld hl, PaletteInRAM
 	ld b, $20
 -:
 	ld a, (de)
@@ -1754,8 +1754,8 @@ _LABEL_739_:
 	jr +
 
 +:
-	outi
-	jr nz, -
+	outi  ; decompression ?
+	jr nz, -  ; https://github.com/trykaar/dc-sms-dasm/blob/6e84167f1d299b114b7024cd9277fa91022fd546/dcsms.asm#L1154
 	ex de, hl
 	ld bc, $0040
 	add hl, bc
@@ -1768,16 +1768,16 @@ _LABEL_739_:
 .db $C5 $08 $CF $7E $D3 $BE $08 $18 $00 $D3 $BE $08 $23 $0D $20 $F3
 .db $08 $EB $01 $40 $00 $09 $EB $C1 $10 $E6 $C9
 
-_LABEL_76B_:
-	ld de, _RAM_C05F_
-	jr +
+LoadPaletteToRAMMirror:
+	ld de, PaletteInRAM2
+	jr DoLoadPalette
 
-_LABEL_770_:
-	ld a, (_RAM_C01D_)
+LoadPaletteToRAMPrimary:
+	ld a, (PaletteInRAMStatus)
 	or $01
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld de, $C01F
-+:
+DoLoadPalette:
 	ld a, (hl)
 	inc hl
 	push hl
@@ -1794,21 +1794,21 @@ _LABEL_770_:
 	ldir
 	ret
 
-_LABEL_78D_:
-	ld hl, _RAM_C01F_
+InitializePaletteInRAM:
+	ld hl, PaletteInRAM
 	ld de, _RAM_C020_
 	ld (hl), $00
 	call _LABEL_CF2_
-	ld hl, _RAM_C01D_
+	ld hl, PaletteInRAMStatus
 	set 0, (hl)
 	ret
 
-_LABEL_79E_:
+WritePalette:
 	xor a
 	out (Port_VDPAddress), a
 	ld a, $C0
 	out (Port_VDPAddress), a
-	ld hl, _RAM_C01F_
+	ld hl, PaletteInRAM
 	ld c, Port_VDPData
 	jp _LABEL_B60_outi
 
@@ -1840,7 +1840,7 @@ _LABEL_849_:
 	pop bc
 	inc de
 	djnz -
-_LABEL_85E_:
+_LABEL_85E_: ; DecompressToVDP ?
 	ld a, (hl)
 	inc hl
 	or a
@@ -1983,137 +1983,7 @@ _LABEL_897_:
 .db $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3
 .db $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3
 
-_LABEL_AE0_outi:
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-_LABEL_B60_outi:
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	outi
-	ret
+.include "utils\outi.asm"
 
 ; Data from BE1 to C18 (56 bytes)
 .db $ED $A3 $D3 $BE $ED $A3 $D3 $BE $ED $A3 $D3 $BE $ED $A3 $D3 $BE
@@ -2142,149 +2012,7 @@ _LABEL_C19_:
 .db $BE $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE
 .db $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE $08 $C9
 
-_LABEL_C70_ldi:
-	ldi
-_LABEL_C72_ldi:
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-_LABEL_CE0_:
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-_LABEL_CF0_:
-	ldi
-_LABEL_CF2_:
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-_LABEL_D00_:
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-_LABEL_D12_:
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-_LABEL_D32_:
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-	ldi
-_LABEL_D5A_:
-	ldi
-	ldi
-	ldi
-_LABEL_D60_:
-	ldi
-_LABEL_D62_:
-	ldi
-_LABEL_D64_:
-	ldi
-_LABEL_D66_:
-	ldi
-_LABEL_D68_:
-	ldi
-	ldi
-	ldi
-	ldi
-	ret
+.include "utils\ldi.asm"
 
 ; Data from D71 to DAD (61 bytes)
 .db $ED $A8 $ED $A8 $ED $A8 $ED $A8 $ED $A8 $ED $A8 $ED $A8 $ED $A8
@@ -2859,7 +2587,7 @@ _LABEL_15FA_:
 	ld (_RAM_CFD1_), a
 	ld a, $A3
 	ld (_RAM_DC04_), a
-	ld hl, _RAM_C01D_
+	ld hl, PaletteInRAMStatus
 	set 1, (hl)
 _LABEL_16AB_:
 	xor a
@@ -4654,7 +4382,7 @@ _LABEL_2983_:
 	ld a, (_RAM_C005_)
 	bit 1, a
 	ret nz
-	ld hl, _RAM_C01D_
+	ld hl, PaletteInRAMStatus
 	set 2, (hl)
 	ret
 
@@ -4670,7 +4398,7 @@ _LABEL_2983_:
 	ld a, (_RAM_C005_)
 	bit 1, a
 	ret nz
-	ld hl, _RAM_C01D_
+	ld hl, PaletteInRAMStatus
 	set 2, (hl)
 	ret
 
@@ -4703,7 +4431,7 @@ _LABEL_2A25_:
 	ld a, (_RAM_C005_)
 	or a
 	ret nz
-	ld hl, _RAM_C01D_
+	ld hl, PaletteInRAMStatus
 	set 3, (hl)
 	ret
 
@@ -4719,7 +4447,7 @@ _LABEL_2A25_:
 	ld a, (_RAM_C005_)
 	or a
 	ret nz
-	ld hl, _RAM_C01D_
+	ld hl, PaletteInRAMStatus
 	set 3, (hl)
 	ret
 
@@ -7441,7 +7169,7 @@ _LABEL_4F25_:
 .db $AF $32 $DB $C3 $3A $05 $C0 $FE $03 $C0 $7B $32 $CF $C3 $C9
 
 _LABEL_4F7B_:
-	ld a, (_RAM_C01D_)
+	ld a, (PaletteInRAMStatus)
 	and $FE
 	jr z, +
 	rrca
@@ -8802,7 +8530,7 @@ _LABEL_5946_:
 	jp _LABEL_28D_
 
 _LABEL_594F_:
-	call _LABEL_78D_
+	call InitializePaletteInRAM
 	ld a, $01
 	ld (_RAM_C014_), a
 	call _LABEL_28D_
@@ -9352,7 +9080,7 @@ _LABEL_617A_:
 	ld (_RAM_C3CC_), a
 	ld (_RAM_C3DA_), a
 	ld a, $02
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld hl, _DATA_102D4_
 	call _LABEL_5DF_
 	ld a, $87
@@ -9393,7 +9121,7 @@ _LABEL_61D6_:
 	ld (_RAM_C3CC_), a
 	ld (_RAM_C3DA_), a
 	ld a, $00
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld a, $04
 	ld (_RAM_FFFF_), a
 	ld hl, _DATA_10316_
@@ -9892,7 +9620,7 @@ _LABEL_66E2_:
 	ld a, $01
 	ld (_RAM_CFDC_), a
 	ld a, $0E
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld hl, $003C
 	ld (_RAM_C012_), hl
 	ld a, $0F
@@ -10019,7 +9747,7 @@ _LABEL_67F0_:
 	ld a, $01
 	ld (_RAM_CFDC_), a
 	ld a, $06
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld hl, $003C
 	ld (_RAM_C012_), hl
 	ld a, $10
@@ -10134,7 +9862,7 @@ _LABEL_6921_:
 	ld bc, $020C
 	call _LABEL_739_
 	ld a, $06
-	ld (_RAM_C01D_), a
+	ld (PaletteInRAMStatus), a
 	ld a, $10
 	ld (_RAM_C018_), a
 	jp _LABEL_299_
@@ -11186,7 +10914,7 @@ _LABEL_72BD_:
 	inc hl
 	ld h, (hl)
 	ld l, a
-	jp _LABEL_770_
+	jp LoadPaletteToRAMPrimary
 
 ; 35th entry of Jump Table from 2C7 (indexed by _RAM_C018_)
 _LABEL_72D5_:
