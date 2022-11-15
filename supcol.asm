@@ -8,6 +8,7 @@ SLOTSIZE $4000
 SLOT 2 $8000
 DEFAULTSLOT 2
 .ENDME
+
 .ROMBANKMAP
 BANKSTOTAL 8
 BANKSIZE $7FF0
@@ -36,13 +37,13 @@ _RAM_C008_ db
 _RAM_C009_ db
 _RAM_C00A_ db
 _RAM_C00B_ db
-_RAM_C00C_input_handling db ;input handling
+_RAM_C00C_CurrentControllerState db ;input handling
 _RAM_C00D_ db
 .ende
 
 .enum $C010 export
 _RAM_C010_ db
-_RAM_C011_ db
+_RAM_C011_VBlankAction db
 _RAM_C012_ dw
 _RAM_C014_ db
 .ende
@@ -879,17 +880,17 @@ Initialize:
 	ei
 	jp _LABEL_264_
 
-_LABEL_170_:
+DoReset:      ; If the game is reset, it jumps back to this point
 	di
 	ld sp, $DFF0
 	xor a
-	ld (_RAM_C005_), a
-	ld (_RAM_C002_), a
+	ld (_RAM_C005_), a ; Set $C005 to zero
+	ld (_RAM_C002_), a ; Set $C002 to zero
 	ld (_RAM_C006_), a
 	ld (_RAM_C3F9_), a
 	ld (_RAM_C008_), a
 	ld (_RAM_C009_), a
-	in a, (Port_VDPStatus)
+	in a, (Port_VDPStatus) ; Clear VDP status flags by reading from port
 	ld b, $16
 	ld c, Port_VDPAddress
 	ld hl, _DATA_24E_
@@ -1003,7 +1004,7 @@ _DATA_24E_:
 .db $00 $88 $00 $89 $00 $8A
 
 _LABEL_264_:
-	call _LABEL_55FC_
+	call _LABEL_55FC_ ; UpdateControllerState ?
 	call _LABEL_55F_
 	call _LABEL_61C_
 	ld hl, _LABEL_264_	; Overriding return address
@@ -1016,10 +1017,10 @@ _LABEL_264_:
 	jr z, +
 	ld (_RAM_C019_), a
 +:
-	ld hl, _DATA_2C7_
-_LABEL_283_:
-	ld e, a
-	ld d, $00
+	ld hl, JumpTable1
+CallJumpTable:
+	ld e, a         ; Load index passed in a into lower byte
+	ld d, $00     ; $00XX where XX is index
 	add hl, de
 	add hl, de
 	ld a, (hl)
@@ -1030,27 +1031,27 @@ _LABEL_283_:
 
 _LABEL_28D_:
 	ld a, $01
-	ld (_RAM_C011_), a
+	ld (_RAM_C011_VBlankAction), a
 -:
-	ld a, (_RAM_C011_)
+	ld a, (_RAM_C011_VBlankAction)
 	or a
 	jr nz, -
 	ret
 
 _LABEL_299_:
 	ld a, $02
-	ld (_RAM_C011_), a
+	ld (_RAM_C011_VBlankAction), a
 -:
-	ld a, (_RAM_C011_)
+	ld a, (_RAM_C011_VBlankAction)
 	or a
 	jr nz, -
 	ret
 
 _LABEL_2A5_:
 	ld a, $03
-	ld (_RAM_C011_), a
+	ld (_RAM_C011_VBlankAction), a
 -:
-	ld a, (_RAM_C011_)
+	ld a, (_RAM_C011_VBlankAction)
 	or a
 	jr nz, -
 	ret
@@ -1067,7 +1068,7 @@ _LABEL_2BD_:
 	ret
 
 ; Jump Table from 2C7 to 320 (45 entries, indexed by _RAM_C018_)
-_DATA_2C7_:
+JumpTable1:
 .dw _LABEL_6008_ _LABEL_605C_ _LABEL_6076_ _LABEL_60F5_ _LABEL_617A_ _LABEL_6249_ _LABEL_645B_ _LABEL_64C9_
 .dw _LABEL_6528_ _LABEL_65BE_ _LABEL_6699_ _LABEL_66E2_ _LABEL_67F0_ _LABEL_6AAD_ _LABEL_6DC9_ _LABEL_6775_
 .dw _LABEL_68A2_ _LABEL_6BDC_ _LABEL_6EF7_ _LABEL_678B_ _LABEL_68B7_ _LABEL_6BE9_ _LABEL_6F03_ _LABEL_6BA6_
@@ -1075,7 +1076,7 @@ _DATA_2C7_:
 .dw _LABEL_719B_ _LABEL_71C2_ _LABEL_72D5_ _LABEL_7354_ _LABEL_73B2_ _LABEL_73DB_ _LABEL_7429_ _LABEL_6915_
 .dw _LABEL_69B0_ _LABEL_6A12_ _LABEL_6A6A_ _LABEL_7453_ _LABEL_74AD_
 
-_LABEL_321_:
+_LABEL_321_: ; VBlankHandler: ?
 	ld a, (_RAM_FFFF_)
 	push af
 	push bc
@@ -1089,19 +1090,19 @@ _LABEL_321_:
 	push ix
 	push iy
 	call _LABEL_520F_
-	ld a, (_RAM_C011_)
+	ld a, (_RAM_C011_VBlankAction)
 	ld hl, _DATA_33D_
-	jp _LABEL_283_
+	jp CallJumpTable
 
-; Jump Table from 33D to 346 (5 entries, indexed by _RAM_C011_)
+; Jump Table from 33D to 346 (5 entries, indexed by _RAM_C011_VBlankAction)
 _DATA_33D_:
 .dw _LABEL_347_ _LABEL_36D_ _LABEL_390_ _LABEL_3DD_ _LABEL_48B_
 
-; 1st entry of Jump Table from 33D (indexed by _RAM_C011_)
+; 1st entry of Jump Table from 33D (indexed by _RAM_C011_VBlankAction)
 _LABEL_347_:
 	jp _LABEL_34A_
 
-_LABEL_34A_:
+_LABEL_34A_: ; endVblank ?
 	ld a, $02
 	ld (_RAM_FFFF_), a
 	call _LABEL_8000_
@@ -1129,11 +1130,11 @@ _LABEL_365_:
 	ei
 	ret
 
-; 2nd entry of Jump Table from 33D (indexed by _RAM_C011_)
+; 2nd entry of Jump Table from 33D (indexed by _RAM_C011_VBlankAction)
 _LABEL_36D_:
 	call _LABEL_521_
 	call _LABEL_534_
-	call _LABEL_540_
+	call VDPOut
 	ld b, $00
 -:
 	djnz -
@@ -1144,14 +1145,14 @@ _LABEL_36D_:
 	ld (_RAM_C01D_), a
 	ld (_RAM_C01E_), a
 	xor a
-	ld (_RAM_C011_), a
+	ld (_RAM_C011_VBlankAction), a
 	jp _LABEL_34A_
 
-; 3rd entry of Jump Table from 33D (indexed by _RAM_C011_)
+; 3rd entry of Jump Table from 33D (indexed by _RAM_C011_VBlankAction)
 _LABEL_390_:
 	call _LABEL_521_
 	call _LABEL_534_
-	call _LABEL_540_
+	call VDPOut
 	ld a, (_RAM_C002_)
 	or a
 	jr nz, +
@@ -1173,7 +1174,7 @@ _LABEL_390_:
 	ld (_RAM_C01D_), a
 	ld (_RAM_C01E_), a
 	xor a
-	ld (_RAM_C011_), a
+	ld (_RAM_C011_VBlankAction), a
 	jp _LABEL_34A_
 
 +:
@@ -1185,11 +1186,11 @@ _LABEL_390_:
 	call _LABEL_503_
 	jr -
 
-; 4th entry of Jump Table from 33D (indexed by _RAM_C011_)
+; 4th entry of Jump Table from 33D (indexed by _RAM_C011_VBlankAction)
 _LABEL_3DD_:
 	call _LABEL_521_
 	call _LABEL_534_
-	call _LABEL_540_
+	call VDPOut
 	ld a, (_RAM_C002_)
 	or a
 	jp nz, _LABEL_463_
@@ -1255,7 +1256,7 @@ _LABEL_3DD_:
 	ld (_RAM_C01D_), a
 	ld (_RAM_C01E_), a
 	xor a
-	ld (_RAM_C011_), a
+	ld (_RAM_C011_VBlankAction), a
 	jp _LABEL_34A_
 
 _LABEL_463_:
@@ -1276,13 +1277,13 @@ _LABEL_463_:
 	call _LABEL_503_
 	jr -
 
-; 5th entry of Jump Table from 33D (indexed by _RAM_C011_)
+; 5th entry of Jump Table from 33D (indexed by _RAM_C011_VBlankAction)
 _LABEL_48B_:
 	call _LABEL_521_
 	call _LABEL_534_
-	call _LABEL_540_
+	call VDPOut
 	xor a
-	ld (_RAM_C011_), a
+	ld (_RAM_C011_VBlankAction), a
 	jp _LABEL_34A_
 
 _LABEL_49B_:
@@ -1391,7 +1392,7 @@ _LABEL_503_:
 _DATA_51B_:
 .db $00 $00 $00 $00 $00 $00
 
-_LABEL_521_:
+_LABEL_521_: ; CheckForReset: ?
 	ld a, (_RAM_C005_)
 	cp $02
 	ret nz
@@ -1401,7 +1402,7 @@ _LABEL_521_:
 	ret z
 	cp $08
 	ret z
-	jp _LABEL_170_
+	jp DoReset
 
 _LABEL_534_:
 	ld a, (_RAM_C014_)
@@ -1416,20 +1417,20 @@ _LABEL_534_:
 	rst $30	; _LABEL_30_
 	ret
 
-_LABEL_540_:
+VDPOut:
 	ld c, Port_VDPData
 	ld a, $00
 	out (Port_VDPAddress), a
 	ld a, $7F
 	out (Port_VDPAddress), a
 	ld hl, _RAM_C300_
-	call _LABEL_B60_
+	call _LABEL_B60_outi ;outi
 	ld a, $80
 	out (Port_VDPAddress), a
 	ld a, $7F
 	out (Port_VDPAddress), a
 	ld hl, _RAM_C340_
-	call _LABEL_AE0_
+	call _LABEL_AE0_outi
 	ret
 
 _LABEL_55F_:
@@ -1438,41 +1439,41 @@ _LABEL_55F_:
 	jr c, ++
 	cp $13
 	jr nc, ++
-	ld a, (_RAM_C00C_input_handling) ;input
+	ld a, (_RAM_C00C_CurrentControllerState) ;input
 	and $0C
 	ld a, $08
 	jr z, +
 	ld a, (_RAM_C010_)
 	dec a
 	jr nz, +
-	ld a, (_RAM_C00C_input_handling) ;input
+	ld a, (_RAM_C00C_CurrentControllerState) ;input
 	and $F3
-	ld (_RAM_C00C_input_handling), a ;input
+	ld (_RAM_C00C_CurrentControllerState), a ;input
 	ld a, $01
 +:
 	ld (_RAM_C010_), a
 	jr +++
 
 ++:
-	ld a, (_RAM_C00C_input_handling) ;input
+	ld a, (_RAM_C00C_CurrentControllerState) ;input
 	and $0F
 	ld a, $10
 	jr z, +
 	ld a, (_RAM_C010_)
 	dec a
 	jr nz, +
-	ld a, (_RAM_C00C_input_handling) ;input
+	ld a, (_RAM_C00C_CurrentControllerState) ;input
 	and $F0
-	ld (_RAM_C00C_input_handling), a
+	ld (_RAM_C00C_CurrentControllerState), a
 	ld a, $0A
 +:
 	ld (_RAM_C010_), a
-+++:
-	ld a, (_RAM_C00C_input_handling)
++++: ; probably UpdateControllerState:
+	ld a, (_RAM_C00C_CurrentControllerState)
 	cpl
 	ld d, a
 	call +
-	ld (_RAM_C00C_input_handling), a
+	ld (_RAM_C00C_CurrentControllerState), a
 	and d
 	ld (_RAM_C00D_), a
 	ret
@@ -1631,10 +1632,10 @@ _LABEL_6A8_:
 	ld hl, _RAM_C100_
 	ld de, _RAM_C101_
 	ld (hl), $00
-	call _LABEL_C70_
-	call _LABEL_C70_
-	call _LABEL_C70_
-	call _LABEL_C72_
+	call _LABEL_C70_ldi
+	call _LABEL_C70_ldi
+	call _LABEL_C70_ldi
+	call _LABEL_C72_ldi
 	ld hl, _RAM_C300_
 	ld (hl), $D0
 	ret
@@ -1809,7 +1810,7 @@ _LABEL_79E_:
 	out (Port_VDPAddress), a
 	ld hl, _RAM_C01F_
 	ld c, Port_VDPData
-	jp _LABEL_B60_
+	jp _LABEL_B60_outi
 
 ; Data from 7AD to 848 (156 bytes)
 .db $7E $23 $D9 $5F $16 $00 $D9 $47 $C5 $D5 $D9 $E1 $E5 $D9 $CD $C4
@@ -1982,7 +1983,7 @@ _LABEL_897_:
 .db $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3
 .db $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3 $ED $A3
 
-_LABEL_AE0_:
+_LABEL_AE0_outi:
 	outi
 	outi
 	outi
@@ -2047,7 +2048,7 @@ _LABEL_AE0_:
 	outi
 	outi
 	outi
-_LABEL_B60_:
+_LABEL_B60_outi:
 	outi
 	outi
 	outi
@@ -2141,9 +2142,9 @@ _LABEL_C19_:
 .db $BE $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE
 .db $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE $08 $D3 $BE $08 $C9
 
-_LABEL_C70_:
+_LABEL_C70_ldi:
 	ldi
-_LABEL_C72_:
+_LABEL_C72_ldi:
 	ldi
 	ldi
 	ldi
@@ -2930,19 +2931,19 @@ _LABEL_173A_:
 	ld a, (_RAM_C3C5_)
 	or a
 	jr z, +
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $02
 	jr nz, ++
 	xor a
 	ld (_RAM_C3C5_), a
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	bit 1, a
 	jr z, ++
 	and $0C
 	jr z, +++
 	xor a
-	ld (_RAM_C00C_input_handling), a
+	ld (_RAM_C00C_CurrentControllerState), a
 	ld (_RAM_C00D_), a
 ++:
 	dec (ix+25)
@@ -2956,7 +2957,7 @@ _LABEL_173A_:
 	jr nz, +
 	or a
 	jr z, +
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	bit 1, a
 	jr z, +
 	ld de, $000A
@@ -3060,7 +3061,7 @@ _LABEL_1836_:
 	ld (ix+2), $00
 	call _LABEL_2C00_
 	call _LABEL_2B99_
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $0E
 	cp $02
 	jp z, _LABEL_18BB_
@@ -3147,7 +3148,7 @@ _LABEL_18EC_:
 	ld hl, _RAM_C6E0_
 	ld de, _RAM_C6E1_
 	ld (hl), $00
-	call _LABEL_C70_
+	call _LABEL_C70_ldi
 	call _LABEL_D12_
 	ld hl, +
 	jp _LABEL_2920_
@@ -5117,7 +5118,7 @@ _LABEL_2CE5_:
 	ret
 
 _LABEL_2CFF_:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $21
 	cp $21
 	jr nz, +
@@ -5126,7 +5127,7 @@ _LABEL_2CFF_:
 	cp $20
 	call z, _LABEL_2C5B_
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $21
 	cp $20
 	jr nz, +
@@ -5135,7 +5136,7 @@ _LABEL_2CFF_:
 	cp $20
 	call z, _LABEL_2C34_
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $11
 	cp $11
 	jr nz, +
@@ -5144,7 +5145,7 @@ _LABEL_2CFF_:
 	cp $10
 	call z, _LABEL_2B08_
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $11
 	cp $10
 	jr nz, +
@@ -5756,7 +5757,7 @@ _LABEL_3E7C_:
 	jp _LABEL_2920_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	ld a, (_RAM_CFCE_)
@@ -5777,7 +5778,7 @@ _LABEL_3E7C_:
 	jp _LABEL_2920_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	dec (ix+25)
@@ -5820,7 +5821,7 @@ _LABEL_3E7C_:
 	jp _LABEL_2920_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	ld a, (_RAM_CFCE_)
@@ -5841,7 +5842,7 @@ _LABEL_3E7C_:
 	jp _LABEL_2920_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	dec (ix+25)
@@ -5866,7 +5867,7 @@ _LABEL_3F77_:
 	jp _LABEL_2920_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	ld a, (_RAM_CFCE_)
@@ -5887,7 +5888,7 @@ _LABEL_3F77_:
 	jp _LABEL_2920_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	dec (ix+25)
@@ -5930,7 +5931,7 @@ _LABEL_3F77_:
 	jp _LABEL_2920_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	ld a, (_RAM_CFCE_)
@@ -5951,7 +5952,7 @@ _LABEL_3F77_:
 	jp _LABEL_2920_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	dec (ix+25)
@@ -6129,7 +6130,7 @@ _DATA_425A_:
 .dw _DATA_12D9D_ _DATA_12CD5_ _DATA_12C0D_ _DATA_12B45_ _DATA_12A7D_
 
 +:
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	ld a, (_RAM_CFCD_)
@@ -6253,7 +6254,7 @@ _DATA_433F_:
 	ld a, (hl)
 	or a
 	jr nz, +++
-	ld a, (_RAM_C00C_input_handling)
+	ld a, (_RAM_C00C_CurrentControllerState)
 	and $80
 	jr nz, +
 	ld a, (_RAM_CFCF_)
@@ -8922,20 +8923,20 @@ _LABEL_5A94_:
 	inc hl
 	ex de, hl
 	ld hl, _RAM_C600_
-	call _LABEL_C70_
+	call _LABEL_C70_ldi
 	call _LABEL_D00_
 	ld hl, _RAM_C6BF_
 	call _LABEL_D60_
 	ld hl, _RAM_C600_
 	ld de, _RAM_C790_
-	call _LABEL_C70_
+	call _LABEL_C70_ldi
 	jp _LABEL_CE0_
 
 _LABEL_5AC0_:
 	ld hl, _RAM_CE10_
 	ld de, _RAM_CE11_
 	ld (hl), $00
-	call _LABEL_C70_
+	call _LABEL_C70_ldi
 	jp _LABEL_D12_
 
 _LABEL_5ACE_:
@@ -9075,10 +9076,10 @@ _LABEL_5F5B_:
 	ld hl, _RAM_C100_
 	ld de, _RAM_C101_
 	ld (hl), $00
-	call _LABEL_C70_
-	call _LABEL_C70_
-	call _LABEL_C70_
-	jp _LABEL_C72_
+	call _LABEL_C70_ldi
+	call _LABEL_C70_ldi
+	call _LABEL_C70_ldi
+	jp _LABEL_C72_ldi
 
 _LABEL_5F6F_:
 	ld a, (_RAM_C3E1_)
@@ -9506,7 +9507,7 @@ _LABEL_630D_:
 	dec a
 	ld (_RAM_C406_), a
 	ld a, (_RAM_C407_)
-	ld (_RAM_C00C_input_handling), a
+	ld (_RAM_C00C_CurrentControllerState), a
 	xor a
 	ld (_RAM_C00D_), a
 	ret
@@ -9523,7 +9524,7 @@ _LABEL_630D_:
 	ld (_RAM_C407_), a
 	inc hl
 	ld (_RAM_C408_), hl
-	ld (_RAM_C00C_input_handling), a
+	ld (_RAM_C00C_CurrentControllerState), a
 	and c
 	ld (_RAM_C00D_), a
 	ret
